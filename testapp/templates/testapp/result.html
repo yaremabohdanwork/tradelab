@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+	<meta charset="utf-8"/>
+	<meta name="viewport" content="width=device-width, initial-scale=1"/>
+	<title>Back-testing Environment</title>
+	<link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"/>
+	<link rel="stylesheet" href="{% static 'testapp/css/style.css' %}"/>
+    <link rel="stylesheet" href="{% static 'testapp/css/dfstyle.css' %}"/>
+    <link rel="icon" type="image/png" href="{% static 'testapp/favicon.png' %}"/>
+	<script src="{% static 'testapp/js/jquery-1.12.4.js' %}"></script>
+	<script src="{% static 'testapp/js/jquery-ui.js' %}"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="{% static 'testapp/js/result.js' %}"></script>
+    {% if perf|length == 1 %}
+    <style type="text/css">
+    .outterTabs>input[type=radio]:checked+label+.innerTabs {
+    display:block; /* show content for each tab specific target */
+	}
+    </style>
+    {% elif perf|length == 2 %}
+    <style type="text/css">
+    .outterTabs>input[type=radio]:checked+label+input+label+.innerTabs,
+	.outterTabs>input[type=radio]+label+input[type=radio]:checked+label+.innerTabs+.innerTabs {
+	    display:block; /* show content for each tab specific target */
+	}
+    </style>
+    {% elif perf|length == 3 %}
+    <style type="text/css">
+    .outterTabs>input[type=radio]:checked+label+input+label+input+label+.innerTabs,
+	.outterTabs>input[type=radio]+label+input[type=radio]:checked+label+input+label+.innerTabs+.innerTabs,
+	.outterTabs>input[type=radio]+label+input+label+input[type=radio]:checked+label+.innerTabs+.innerTabs+.innerTabs {
+	    display:block; /* show content for each tab specific target */
+	}
+    </style>
+    {% endif %}
+</head>
+<body>
+	<input type="text" id="from" style="width:100px;" class="text ui-widget-content ui-corner-all" placeholder="{{ start_date }}" readonly />
+	<label for="to">to</label>
+	<input type="text" id="to" style="width:100px;" class="text ui-widget-content ui-corner-all" placeholder="{{ end_date }}" readonly />
+	<label for="capital">&nbsp; capital base</label>
+	<input type="text" id="capital" style="width:100px;" class="text ui-widget-content ui-corner-all" placeholder="{{ init_capital }}" readonly />
+	<label for="tradingpair">&nbsp; trading pair</label>
+	<select id="tradingpair" class="text ui-widget-content ui-corner-all" disabled>
+	    <option value="{{ trading_pair }}"> {{ trading_pair }} </option>
+	</select>
+	<button type="button" id="submitparams" disabled=true>Run Backtest</button>
+	<button type="button" id="settings" disabled=true>Settings</button>
+	<button type="button" id="startnew">Start New Backtests</button>
+	
+	<div id="dialog-confirm" title="Start new backtests" data-url="{% url 'testapp:index' %}">
+		<p>Are you sure to leave the current results page and start new backtests?</p>
+	</div>
+
+	<hr>
+
+	<div class="outterTabs tabsWrapper">
+		{% for name in filename_list %}
+		<input class="commandTab" type="radio" id="{% cycle 'outCmdTab0' 'outCmdTab1' 'outCmdTab2' %}" name="outCmdTabs" {% cycle 'checked' '' '' %}>
+		<label for="{% cycle 'outCmdTab0' 'outCmdTab1' 'outCmdTab2' %}">{{ name|escape }}</label>
+		{% endfor %}
+		{% for p in perf %}
+		<div class="tabContent innerTabs tabsWrapper">
+			<input class="commandTab" type="radio" id="{% cycle 'inCmdTabsOvw0' 'inCmdTabsOvw1' 'inCmdTabsOvw2' as tabOvw %}" name="{% cycle 'inCmdTabs0' 'inCmdTabs1' 'inCmdTabs2' as inCT %}" checked>
+			<label for="{{ tabOvw }}">Results Overview</label>
+			<input class="commandTab" type="radio" id="{% cycle 'inCmdTabsDaily0' 'inCmdTabsDaily1' 'inCmdTabsDaily2' as tabDly %}" name="{{ inCT }}">
+			<label for="{{ tabDly }}">Daily Details</label>
+			<input class="commandTab" type="radio" id="{% cycle 'inCmdTabsCmp0' 'inCmdTabsCmp1' 'inCmdTabsCmp2' as tabCmp %}" name="{{ inCT }}">
+			<label for="{{ tabCmp }}">Comparison</label>
+			<input class="commandTab" type="radio" id="{% cycle 'inCmdTabsExp0' 'inCmdTabsExp1' 'inCmdTabsExp2' as tabExp %}" name="{{ inCT }}">
+			<label for="{{ tabExp }}">Export to File</label>
+			<div class="tabContent">
+				<ul id="stat-ovw">
+					<li>Total Returns:<br><span id="stats">{{p.0.total_returns}}</span></li>
+					<li>Mean Daily Returns:<br><span id="stats">{{p.0.mean_daily_returns}}</span></li>
+					<li>Gross Returns:<br><span id="stats">{{p.0.gross_returns}}</span></li>
+					<li>Number of Trades:<br><span id="stats">{{p.0.number_of_trades}}</span></li>
+					<li>Volatility:<br><span id="stats">{{p.0.volatility}}</span></li>
+					<li>Sharpe Ratio:<br><span id="stats">{{p.0.sharpe_ratio}}</span></li>
+				</ul>
+				{% if p.4 %}
+					<br><span id="runtime">Run time: {{ p.4 }}</span>
+				{% endif %}
+				<br><br>{{p.1|safe}}
+			</div>
+			<div class="tabContent">
+				{{p.2|safe}}
+			</div>
+			<div class="tabContent">
+				{{compare|safe}}
+			</div>
+			<div class="tabContent">
+				<form name="{% cycle 'expfile-1' 'expfile-2' 'expfile-3' %}" class="expform" action="{% url 'testapp:export' %}" method="post">{% csrf_token %}
+					<input type="text" name="expname" class="text ui-widget-content ui-corner-all" required pattern="[a-zA-Z0-9_\-\.]+" title="Please only use letters, numbers and . _ -" value="{% cycle 'tradingstrategy1' 'tradingstrategy2' 'tradingstrategy3' %}" />
+					<input type="text" name="expidx" style="display:none;" value="{% cycle '0' '1' '2' %}" />
+					<input type="submit" class="expbutton" value="Export" />
+				</form>
+				<label id="{% cycle 'expinfo-1' 'expinfo-2' 'expinfo-3' %}"> </label><br>
+				{{p.3|safe}}
+			</div>
+		</div>
+		{% endfor %}
+	</div>
+
+</body>
